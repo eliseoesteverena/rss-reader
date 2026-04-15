@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSS</title>
+<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="shortcut icon" href="/favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<meta name="apple-mobile-web-app-title" content="RSS Reader" />
+<link rel="manifest" href="/site.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=Lora:ital,wght@0,400;0,500;1,400&family=Roboto:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --font-size: 16px;
+    --line-height: 1.7;
+    --margin: 48px;
+    --font-family: 'DM Sans', sans-serif;
+
+    --bg: #f7f6f3;
+    --bg2: #efede8;
+    --bg3: #e5e2db;
+    --surface: #ffffff;
+    --border: #d8d4cc;
+    --text: #1a1917;
+    --text-muted: #7a776f;
+    --text-faint: #b0ada5;
+    --accent: #2a5c45;
+    --accent-hover: #1e4433;
+    --danger: #8b2e2e;
+    --tag-bg: #e8f0ec;
+    --tag-text: #2a5c45;
+    --scrollbar: #d0cdc6;
+    --sidebar-w: 260px;
+    --sidebar-transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  [data-theme="dark"] {
+    --bg: #141412;
+    --bg2: #1c1b18;
+    --bg3: #252420;
+    --surface: #1c1b18;
+    --border: #2e2d28;
+    --text: #e8e5de;
+    --text-muted: #8a8780;
+    --text-faint: #4a4842;
+    --accent: #5a9e7a;
+    --accent-hover: #6eb88d;
+    --danger: #c06060;
+    --tag-bg: #1e3028;
+    --tag-text: #5a9e7a;
+    --scrollbar: #2e2d28;
+  }
+
+  html { font-size: var(--font-size); }
+
+  body {
+    font-family: var(--font-family);
+    background: var(--bg);
+    color: var(--text);
+    line-height: var(--line-height);
+    min-height: 100vh;
+    transition: background 0.2s, color 0.2s;
+    overflow: hidden;
+  }
+
+  /* ─── Layout ─── */
+  #app { display: flex; height: 100vh; overflow: hidden; position: relative; }
+
+  /* ─── Sidebar overlay (mobile) ─── */
+  #sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.28s;
+  }
+  #sidebar-overlay.visible { opacity: 1; }
+
+  /* ─── Sidebar ─── */
+  #sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: background 0.2s, var(--sidebar-transition);
+    flex-shrink: 0;
+    z-index: 60;
+  }
+
+  #sidebar-header {
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  #sidebar-header h1 {
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    padding: 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+    line-height: 1;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .icon-btn:hover { color: var(--text); background: var(--bg3); }
+  .icon-btn:active { background: var(--bg3); color: var(--text); }
+  .icon-btn svg { width: 16px; height: 16px; }
+
+  #feed-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+    -webkit-overflow-scrolling: touch;
+  }
+  #feed-list::-webkit-scrollbar { width: 4px; }
+  #feed-list::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
+
+  .feed-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: background 0.1s;
+    position: relative;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .feed-item:hover { background: var(--bg3); }
+  .feed-item.active { background: var(--bg3); }
+  .feed-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+  }
+
+  .feed-favicon {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  .feed-favicon-placeholder {
+    width: 16px; height: 16px;
+    border-radius: 3px;
+    background: var(--bg3);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: 9px;
+  }
+
+  .feed-title {
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+  }
+
+  .feed-count {
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    flex-shrink: 0;
+  }
+
+  .feed-remove {
+    opacity: 0;
+    transition: opacity 0.15s;
+    flex-shrink: 0;
+  }
+  .feed-item:hover .feed-remove,
+  .touch-device .feed-remove { opacity: 1; }
+
+  /* Add feed */
+  #add-feed-form {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+  }
+
+  #add-feed-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-size: 0.78rem;
+    font-family: var(--font-family);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.15s;
+    min-width: 0;
+  }
+  #add-feed-input:focus { border-color: var(--accent); }
+  #add-feed-input::placeholder { color: var(--text-faint); }
+
+  .btn-primary {
+    background: var(--accent);
+    border: none;
+    border-radius: 5px;
+    padding: 7px 12px;
+    color: #fff;
+    font-size: 0.78rem;
+    font-family: var(--font-family);
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+  }
+  .btn-primary:hover { background: var(--accent-hover); }
+
+  /* ─── Main ─── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+  }
+
+  #main-header {
+    padding: 0 16px 0 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg);
+    height: 52px;
+    flex-shrink: 0;
+  }
+
+  /* Mobile menu toggle — always present in DOM, hidden on desktop */
+  #menu-toggle {
+    display: none;
+    flex-shrink: 0;
+  }
+
+  #feed-name {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  #feed-url-display {
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+    flex-shrink: 1;
+  }
+
+  .header-actions { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
+
+  /* ─── Articles ─── */
+  #articles-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #articles-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 28px var(--margin);
+    -webkit-overflow-scrolling: touch;
+  }
+  #articles-container::-webkit-scrollbar { width: 5px; }
+  #articles-container::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+  .article {
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .article:last-child { border-bottom: none; }
+
+  .article-meta {
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .article-title {
+    font-size: 0.98rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--text);
+    margin-bottom: 6px;
+    transition: color 0.12s;
+  }
+  .article:hover .article-title,
+  .article:active .article-title { color: var(--accent); }
+
+  .article-summary {
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    line-height: 1.55;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .article-thumb {
+    float: right;
+    margin: 0 0 8px 14px;
+    width: 80px; height: 54px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  /* ─── Article reader ─── */
+  #reader-view {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #reader-header {
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    height: 52px;
+    flex-shrink: 0;
+  }
+
+  #reader-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 36px var(--margin);
+    -webkit-overflow-scrolling: touch;
+  }
+  #reader-content::-webkit-scrollbar { width: 5px; }
+  #reader-content::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 3px; }
+
+  #reader-title {
+    font-size: 1.45rem;
+    font-weight: 500;
+    line-height: 1.25;
+    margin-bottom: 12px;
+    color: var(--text);
+  }
+
+  #reader-meta {
+    font-size: 0.74rem;
+    color: var(--text-faint);
+    margin-bottom: 28px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  #reader-body {
+    font-size: 1rem;
+    color: var(--text);
+    line-height: var(--line-height);
+  }
+  #reader-body p { margin-bottom: 1.1em; }
+  #reader-body h1, #reader-body h2, #reader-body h3 {
+    font-weight: 500;
+    margin: 1.5em 0 0.5em;
+    line-height: 1.3;
+  }
+  #reader-body a { color: var(--accent); text-decoration: none; }
+  #reader-body a:hover { text-decoration: underline; }
+  #reader-body img {
+    max-width: 100%;
+    border-radius: 5px;
+    margin: 12px 0;
+    border: 1px solid var(--border);
+    height: auto;
+  }
+  #reader-body blockquote {
+    border-left: 2px solid var(--accent);
+    padding-left: 1em;
+    margin: 1em 0;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+  #reader-body pre, #reader-body code {
+    font-family: 'Courier New', monospace;
+    font-size: 0.87em;
+    background: var(--bg3);
+    border-radius: 3px;
+    padding: 0.15em 0.35em;
+  }
+  #reader-body pre { padding: 1em; overflow-x: auto; display: block; }
+  #reader-body pre code { background: none; padding: 0; }
+  #reader-body figure { margin: 1em 0; }
+  #reader-body figcaption { font-size: 0.8em; color: var(--text-faint); margin-top: 4px; }
+
+  .media-hidden img,
+  .media-hidden video,
+  .media-hidden audio,
+  .media-hidden iframe { display: none !important; }
+
+  /* ─── Settings panel ─── */
+  #settings-panel {
+    display: none;
+    position: fixed;
+    top: 0; right: 0;
+    width: 300px;
+    height: 100vh;
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    z-index: 80;
+    overflow-y: auto;
+    padding: 24px 20px;
+    flex-direction: column;
+    gap: 0;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.07);
+  }
+  #settings-panel.open { display: flex; }
+
+  #settings-title {
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .setting-group { margin-bottom: 22px; }
+
+  .setting-label {
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    font-weight: 500;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .range-input {
+    flex: 1;
+    appearance: none;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  .range-input::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .range-input::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+  .range-value {
+    font-size: 0.74rem;
+    color: var(--text-faint);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .font-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .font-option {
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    background: var(--bg);
+    transition: border-color 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .font-option:hover { border-color: var(--accent); color: var(--text); }
+  .font-option.selected { border-color: var(--accent); color: var(--accent); background: var(--tag-bg); }
+  .font-option.dm-sans { font-family: 'DM Sans', sans-serif; }
+  .font-option.roboto { font-family: 'Roboto', sans-serif; }
+  .font-option.lora { font-family: 'Lora', serif; }
+
+  /* Toggle */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 0;
+  }
+  .toggle-label { font-size: 0.83rem; color: var(--text); }
+
+  .toggle {
+    position: relative;
+    width: 36px; height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 20px;
+    transition: background 0.2s;
+  }
+  .toggle input:checked + .toggle-track { background: var(--accent); }
+  .toggle-thumb {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    pointer-events: none;
+  }
+  .toggle input:checked ~ .toggle-thumb { transform: translateX(16px); }
+
+  .settings-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 0 22px;
+  }
+
+  /* ─── Empty / loading states ─── */
+  .state-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 200px;
+    gap: 12px;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 40px;
+  }
+  .state-msg svg { opacity: 0.3; }
+  .state-msg p { font-size: 0.85rem; line-height: 1.6; }
+
+  .spinner {
+    width: 22px; height: 22px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: var(--text);
+    color: var(--bg);
+    font-size: 0.78rem;
+    padding: 8px 16px;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 200;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ─── MOBILE ─────────────────────────────────────────── */
+  @media (max-width: 680px) {
+    :root {
+      --margin: 18px;
+      --sidebar-w: 280px;
+    }
+
+    #menu-toggle { display: flex; }
+
+    #sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      height: 100vh;
+      transform: translateX(-100%);
+      box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+    }
+    #sidebar.open { transform: translateX(0); }
+
+    #sidebar-overlay { display: block; }
+
+    #feed-url-display { display: none; }
+
+    #settings-panel { width: 100%; max-width: 320px; }
+
+    .article-thumb { width: 68px; height: 46px; }
+
+    #reader-title { font-size: 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<div id="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div id="app">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h1>RSS</h1>
+      <div style="display:flex;gap:2px">
+        <button class="icon-btn" id="refresh-btn" title="Actualizar feed">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </button>
+        <button class="icon-btn" id="settings-btn" title="Ajustes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <!-- Mobile close button inside sidebar -->
+        <button class="icon-btn" id="sidebar-close-btn" title="Cerrar" style="display:none">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="feed-list"></div>
+
+    <div id="add-feed-form">
+      <input type="text" id="add-feed-input" placeholder="URL del feed…" autocomplete="off" spellcheck="false" inputmode="url">
+      <button class="btn-primary" id="add-feed-btn">+</button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="main-header">
+      <!-- Hamburger: mobile only -->
+      <button class="icon-btn" id="menu-toggle" title="Feeds" aria-label="Abrir feeds">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+
+      <span id="feed-name" style="color:var(--text-faint);font-weight:400;font-size:0.82rem">Selecciona un feed</span>
+      <span id="feed-url-display"></span>
+      <div class="header-actions" id="header-actions" style="display:none">
+        <button class="icon-btn" id="open-link-btn" title="Abrir en navegador">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div id="articles-view">
+      <div id="articles-container">
+        <div class="state-msg">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg>
+          <p>Agrega un feed RSS desde<br>el menú lateral para comenzar.</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="reader-view">
+      <div id="reader-header">
+        <button class="icon-btn" id="back-btn" title="Volver">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div style="flex:1"></div>
+        <button class="icon-btn" id="reader-open-btn" title="Abrir artículo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+      </div>
+      <div id="reader-content">
+        <h1 id="reader-title"></h1>
+        <div id="reader-meta"></div>
+        <div id="reader-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings panel -->
+<div id="settings-panel">
+  <div id="settings-title">
+    Ajustes
+    <button class="icon-btn" id="settings-close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Apariencia</div>
+    <div class="toggle-row">
+      <span class="toggle-label">Tema oscuro</span>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-dark">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <div class="setting-group">
+    <div class="setting-label">Tipografía</div>
+    <div class="font-options">
+      <div class="font-option dm-sans" data-font="dm-sans">DM Sans</div>
+      <div class="font-option roboto" data-font="roboto">Roboto</div>
+      <div class="font-option lora" data-font="lora">Lora — cuerpo de texto</div>
+    </div>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <div class="setting-group">
+    <div class="setting-label">Tamaño de fuente</div>
+    <div class="setting-row">
+      <input type="range" class="range-input" id="font-size-range" min="13" max="22" step="1">
+      <span class="range-value" id="font-size-val"></span>
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Altura de línea</div>
+    <div class="setting-row">
+      <input type="range" class="range-input" id="line-height-range" min="1.3" max="2.2" step="0.05">
+      <span class="range-value" id="line-height-val"></span>
+    </div>
+  </div>
+
+  <div class="setting-group">
+    <div class="setting-label">Márgenes</div>
+    <div class="setting-row">
+      <input type="range" class="range-input" id="margin-range" min="12" max="120" step="4">
+      <span class="range-value" id="margin-val"></span>
+    </div>
+  </div>
+
+  <div class="settings-divider"></div>
+
+  <div class="setting-group">
+    <div class="setting-label">Contenido</div>
+    <div class="toggle-row">
+      <span class="toggle-label">Imágenes y multimedia</span>
+      <label class="toggle">
+        <input type="checkbox" id="toggle-media" checked>
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb"></div>
+      </label>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── Proxy (Cloudflare Pages Function) ──────────────────
+// All feed requests go through /proxy?url=... which is handled
+// by /functions/proxy.js — no external CORS proxy needed.
+const PROXY_BASE = '/proxy?url=';
+
+// ─── State ──────────────────────────────────────────────
+const defaultSettings = {
+  theme: 'light',
+  font: 'dm-sans',
+  fontSize: 16,
+  lineHeight: 1.7,
+  margin: 48,
+  media: true,
+};
+
+let feeds = [];
+let settings = {};
+let activeFeedIndex = null;
+let activeArticle = null;
+
+// Detect touch device (show remove buttons always)
+if ('ontouchstart' in window) {
+  document.body.classList.add('touch-device');
+}
+
+// ─── Sidebar mobile logic ────────────────────────────────
+const sidebar    = document.getElementById('sidebar');
+const overlay    = document.getElementById('sidebar-overlay');
+const menuToggle = document.getElementById('menu-toggle');
+const closeSidebarBtn = document.getElementById('sidebar-close-btn');
+
+function isMobile() { return window.innerWidth <= 680; }
+
+function openSidebar() {
+  sidebar.classList.add('open');
+  overlay.classList.add('visible');
+  if (isMobile()) closeSidebarBtn.style.display = 'flex';
+}
+
+function closeSidebar() {
+  sidebar.classList.remove('open');
+  overlay.classList.remove('visible');
+  closeSidebarBtn.style.display = 'none';
+}
+
+menuToggle.addEventListener('click', () => {
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+});
+
+overlay.addEventListener('click', closeSidebar);
+closeSidebarBtn.addEventListener('click', closeSidebar);
+
+// Swipe-to-open from left edge
+let touchStartX = 0;
+let touchStartY = 0;
+document.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener('touchend', e => {
+  if (!isMobile()) return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = Math.abs(e.changedTouches[0].clientY - touchStartY);
+  // swipe right from left edge (≤32px) to open
+  if (touchStartX <= 32 && dx > 50 && dy < 60) openSidebar();
+  // swipe left while open to close
+  if (sidebar.classList.contains('open') && dx < -60 && dy < 60) closeSidebar();
+}, { passive: true });
+
+// ─── Persistence ────────────────────────────────────────
+function saveFeeds() {
+  const toSave = feeds.map(f => ({ url: f.url, title: f.title }));
+  localStorage.setItem('rss_feeds', JSON.stringify(toSave));
+}
+
+function loadFeeds() {
+  try {
+    const raw = localStorage.getItem('rss_feeds');
+    if (raw) {
+      return JSON.parse(raw).map(f => ({
+        url: f.url, title: f.title || f.url,
+        items: [], loading: false, error: null
+      }));
+    }
+  } catch(e) {}
+  return [];
+}
+
+function saveSettings() {
+  localStorage.setItem('rss_settings', JSON.stringify(settings));
+}
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem('rss_settings');
+    if (raw) return { ...defaultSettings, ...JSON.parse(raw) };
+  } catch(e) {}
+  return { ...defaultSettings };
+}
+
+// ─── Apply settings ──────────────────────────────────────
+function applySettings() {
+  document.documentElement.style.setProperty('--font-size', settings.fontSize + 'px');
+  document.documentElement.style.setProperty('--line-height', settings.lineHeight);
+  document.documentElement.style.setProperty('--margin', settings.margin + 'px');
+
+  const fontMap = {
+    'dm-sans': "'DM Sans', sans-serif",
+    'roboto':  "'Roboto', sans-serif",
+    'lora':    "'Lora', serif",
+  };
+  document.documentElement.style.setProperty('--font-family', fontMap[settings.font] || fontMap['dm-sans']);
+  document.documentElement.setAttribute('data-theme', settings.theme);
+
+  document.getElementById('toggle-dark').checked = settings.theme === 'dark';
+  document.getElementById('toggle-media').checked = settings.media;
+  document.getElementById('font-size-range').value = settings.fontSize;
+  document.getElementById('font-size-val').textContent = settings.fontSize + 'px';
+  document.getElementById('line-height-range').value = settings.lineHeight;
+  document.getElementById('line-height-val').textContent = parseFloat(settings.lineHeight).toFixed(2);
+  document.getElementById('margin-range').value = settings.margin;
+  document.getElementById('margin-val').textContent = settings.margin + 'px';
+
+  document.querySelectorAll('.font-option').forEach(el =>
+    el.classList.toggle('selected', el.dataset.font === settings.font)
+  );
+
+  document.getElementById('reader-body').classList.toggle('media-hidden', !settings.media);
+  document.getElementById('articles-container').classList.toggle('media-hidden', !settings.media);
+}
+
+// ─── Toast ───────────────────────────────────────────────
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ─── RSS Parsing ─────────────────────────────────────────
+async function fetchFeed(url) {
+  const proxyUrl = PROXY_BASE + encodeURIComponent(url);
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const txt = await res.text();
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(txt, 'text/xml');
+
+  // Check for parse error
+  if (doc.querySelector('parsererror')) {
+    // Try parsing as HTML (some feeds return HTML on error)
+    throw new Error('Feed XML inválido');
+  }
+
+  const isAtom = !!doc.querySelector('feed');
+  const items = [];
+
+  if (isAtom) {
+    const feedTitle = doc.querySelector('feed > title')?.textContent?.trim() || url;
+    doc.querySelectorAll('entry').forEach(entry => {
+      const link = entry.querySelector('link[rel="alternate"]')?.getAttribute('href')
+        || entry.querySelector('link')?.getAttribute('href') || '';
+      const contentEl = entry.querySelector('content');
+      const summaryEl = entry.querySelector('summary');
+      const content = contentEl?.innerHTML || summaryEl?.innerHTML || '';
+      items.push({
+        title: entry.querySelector('title')?.textContent?.trim() || '(sin título)',
+        link,
+        date: entry.querySelector('updated, published')?.textContent || '',
+        summary: stripHtml(summaryEl?.textContent || contentEl?.textContent || '').substring(0, 300),
+        content,
+        thumb: extractThumb(content),
+      });
+    });
+    return { title: feedTitle, items };
+  } else {
+    const feedTitle = doc.querySelector('channel > title')?.textContent?.trim() || url;
+    doc.querySelectorAll('item').forEach(item => {
+      const contentEncoded = item.querySelector('*|encoded')?.textContent || '';
+      const desc = item.querySelector('description')?.textContent || '';
+      const html = contentEncoded || desc;
+      items.push({
+        title: item.querySelector('title')?.textContent?.trim() || '(sin título)',
+        link: item.querySelector('link')?.textContent?.trim()
+          || item.querySelector('guid')?.textContent?.trim() || '',
+        date: item.querySelector('pubDate')?.textContent || '',
+        summary: stripHtml(desc).substring(0, 300),
+        content: html,
+        thumb: extractThumb(html),
+      });
+    });
+    return { title: feedTitle, items };
+  }
+}
+
+function stripHtml(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  return d.textContent || '';
+}
+
+function extractThumb(html) {
+  const m = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return m ? m[1] : null;
+}
+
+function formatDate(str) {
+  if (!str) return '';
+  try {
+    const d = new Date(str);
+    if (isNaN(d)) return str;
+    return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch(e) { return str; }
+}
+
+// ─── Render feed list ────────────────────────────────────
+function renderFeedList() {
+  const list = document.getElementById('feed-list');
+  list.innerHTML = '';
+
+  if (feeds.length === 0) {
+    list.innerHTML = '<div style="padding:16px 14px;font-size:0.78rem;color:var(--text-faint)">Sin feeds agregados.</div>';
+    return;
+  }
+
+  feeds.forEach((feed, i) => {
+    const item = document.createElement('div');
+    item.className = 'feed-item' + (activeFeedIndex === i ? ' active' : '');
+
+    try {
+      const favUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(new URL(feed.url).hostname)}&sz=32`;
+      const fav = document.createElement('img');
+      fav.className = 'feed-favicon';
+      fav.src = favUrl;
+      fav.onerror = function() {
+        this.style.display = 'none';
+        const ph = document.createElement('div');
+        ph.className = 'feed-favicon-placeholder';
+        ph.textContent = (feed.title || feed.url)[0].toUpperCase();
+        item.insertBefore(ph, this.nextSibling);
+      };
+      item.appendChild(fav);
+    } catch(e) {
+      const ph = document.createElement('div');
+      ph.className = 'feed-favicon-placeholder';
+      ph.textContent = (feed.title || feed.url)[0]?.toUpperCase() || '?';
+      item.appendChild(ph);
+    }
+
+    const title = document.createElement('span');
+    title.className = 'feed-title';
+    title.title = feed.title || feed.url;
+    title.textContent = feed.title || feed.url;
+
+    const count = document.createElement('span');
+    count.className = 'feed-count';
+    if (feed.loading) {
+      count.innerHTML = '<div class="spinner" style="width:11px;height:11px;border-width:1.5px"></div>';
+    } else {
+      count.textContent = (feed.items && feed.items.length) ? feed.items.length : '';
+    }
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'icon-btn feed-remove';
+    removeBtn.title = 'Eliminar';
+    removeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    removeBtn.addEventListener('click', e => { e.stopPropagation(); removeFeed(i); });
+
+    item.appendChild(title);
+    item.appendChild(count);
+    item.appendChild(removeBtn);
+    item.addEventListener('click', () => {
+      selectFeed(i);
+      if (isMobile()) closeSidebar();
+    });
+    list.appendChild(item);
+  });
+}
+
+// ─── Feed actions ────────────────────────────────────────
+async function selectFeed(index) {
+  activeFeedIndex = index;
+  activeArticle = null;
+  showArticlesView();
+  renderFeedList();
+  renderArticles();
+  updateMainHeader();
+
+  const feed = feeds[index];
+  if (!feed.items || feed.items.length === 0) {
+    await reloadFeed(index);
+  }
+}
+
+async function reloadFeed(index) {
+  const feed = feeds[index];
+  feed.loading = true;
+  feed.error = null;
+  renderFeedList();
+  renderArticles();
+
+  try {
+    const data = await fetchFeed(feed.url);
+    feed.title = data.title;
+    feed.items = data.items;
+    feed.loading = false;
+    saveFeeds();
+  } catch(e) {
+    feed.loading = false;
+    feed.error = 'No se pudo cargar el feed.<br>Verifica que la URL sea válida.';
+    console.error(e);
+  }
+  renderFeedList();
+  renderArticles();
+  updateMainHeader();
+}
+
+async function addFeed(url) {
+  url = url.trim();
+  if (!url) return;
+  if (!url.startsWith('http')) url = 'https://' + url;
+
+  if (feeds.some(f => f.url === url)) {
+    showToast('Este feed ya está agregado.');
+    return;
+  }
+
+  const feed = { url, title: url, items: [], loading: true, error: null };
+  feeds.push(feed);
+  const index = feeds.length - 1;
+  saveFeeds();
+  renderFeedList();
+
+  activeFeedIndex = index;
+  showArticlesView();
+  updateMainHeader();
+  renderArticles();
+
+  try {
+    const data = await fetchFeed(url);
+    feed.title = data.title;
+    feed.items = data.items;
+    feed.loading = false;
+    saveFeeds();
+  } catch(e) {
+    feed.loading = false;
+    feed.error = 'No se pudo cargar el feed. Verifica la URL.';
+  }
+  renderFeedList();
+  renderArticles();
+  updateMainHeader();
+}
+
+function removeFeed(index) {
+  feeds.splice(index, 1);
+  if (activeFeedIndex === index) {
+    activeFeedIndex = feeds.length > 0 ? 0 : null;
+    activeArticle = null;
+    showArticlesView();
+  } else if (activeFeedIndex > index) {
+    activeFeedIndex--;
+  }
+  saveFeeds();
+  renderFeedList();
+  if (activeFeedIndex !== null) {
+    renderArticles();
+    updateMainHeader();
+  } else {
+    resetMain();
+  }
+}
+
+function updateMainHeader() {
+  const nameEl = document.getElementById('feed-name');
+  const urlEl  = document.getElementById('feed-url-display');
+  const actions = document.getElementById('header-actions');
+  const openBtn = document.getElementById('open-link-btn');
+
+  if (activeFeedIndex === null) {
+    nameEl.textContent = 'Selecciona un feed';
+    nameEl.style.cssText = 'color:var(--text-faint);font-weight:400;font-size:0.82rem';
+    urlEl.textContent = '';
+    actions.style.display = 'none';
+    return;
+  }
+  const feed = feeds[activeFeedIndex];
+  nameEl.textContent = feed.title || feed.url;
+  nameEl.style.cssText = '';
+  urlEl.textContent = feed.url;
+  actions.style.display = 'flex';
+  openBtn.onclick = () => window.open(feed.url, '_blank');
+}
+
+// ─── Render articles ─────────────────────────────────────
+function renderArticles() {
+  const container = document.getElementById('articles-container');
+
+  if (activeFeedIndex === null) {
+    container.innerHTML = '<div class="state-msg"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg><p>Agrega un feed RSS para comenzar.</p></div>';
+    return;
+  }
+
+  const feed = feeds[activeFeedIndex];
+
+  if (feed.loading) {
+    container.innerHTML = '<div class="state-msg"><div class="spinner"></div><p>Cargando feed…</p></div>';
+    return;
+  }
+  if (feed.error) {
+    container.innerHTML = `<div class="state-msg"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>${feed.error}</p></div>`;
+    return;
+  }
+  if (!feed.items || feed.items.length === 0) {
+    container.innerHTML = '<div class="state-msg"><p>Sin artículos disponibles.</p></div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  feed.items.forEach(item => {
+    const article = document.createElement('div');
+    article.className = 'article';
+
+    let thumbHtml = '';
+    if (item.thumb && settings.media) {
+      thumbHtml = `<img class="article-thumb" src="${item.thumb}" alt="" loading="lazy" onerror="this.style.display='none'">`;
+    }
+
+    article.innerHTML = `
+      ${thumbHtml}
+      <div class="article-meta"><span>${formatDate(item.date)}</span></div>
+      <div class="article-title">${item.title}</div>
+      <div class="article-summary">${item.summary}</div>
+    `;
+    article.addEventListener('click', () => openArticle(item));
+    container.appendChild(article);
+  });
+}
+
+// ─── Reader ──────────────────────────────────────────────
+function openArticle(item) {
+  activeArticle = item;
+  document.getElementById('reader-title').textContent = item.title;
+  document.getElementById('reader-meta').textContent = formatDate(item.date);
+  const body = document.getElementById('reader-body');
+  body.innerHTML = item.content || item.summary || '<p>Sin contenido.</p>';
+  body.classList.toggle('media-hidden', !settings.media);
+  document.getElementById('reader-open-btn').onclick = () => window.open(item.link, '_blank');
+  showReaderView();
+}
+
+function showReaderView() {
+  document.getElementById('articles-view').style.display = 'none';
+  const rv = document.getElementById('reader-view');
+  rv.style.display = 'flex';
+  document.getElementById('reader-content').scrollTop = 0;
+}
+
+function showArticlesView() {
+  document.getElementById('reader-view').style.display = 'none';
+  document.getElementById('articles-view').style.display = 'flex';
+}
+
+function resetMain() {
+  showArticlesView();
+  const nameEl = document.getElementById('feed-name');
+  nameEl.textContent = 'Selecciona un feed';
+  nameEl.style.cssText = 'color:var(--text-faint);font-weight:400;font-size:0.82rem';
+  document.getElementById('feed-url-display').textContent = '';
+  document.getElementById('header-actions').style.display = 'none';
+  document.getElementById('articles-container').innerHTML = '<div class="state-msg"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg><p>Agrega un feed RSS para comenzar.</p></div>';
+}
+
+// ─── Events ──────────────────────────────────────────────
+document.getElementById('add-feed-btn').addEventListener('click', () => {
+  const input = document.getElementById('add-feed-input');
+  addFeed(input.value);
+  input.value = '';
+});
+
+document.getElementById('add-feed-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { addFeed(e.target.value); e.target.value = ''; }
+});
+
+document.getElementById('back-btn').addEventListener('click', () => {
+  activeArticle = null;
+  showArticlesView();
+});
+
+document.getElementById('refresh-btn').addEventListener('click', async () => {
+  if (activeFeedIndex === null) { showToast('Selecciona un feed primero.'); return; }
+  await reloadFeed(activeFeedIndex);
+  showToast('Feed actualizado.');
+});
+
+document.getElementById('settings-btn').addEventListener('click', () => {
+  document.getElementById('settings-panel').classList.toggle('open');
+});
+document.getElementById('settings-close').addEventListener('click', () => {
+  document.getElementById('settings-panel').classList.remove('open');
+});
+
+document.getElementById('toggle-dark').addEventListener('change', e => {
+  settings.theme = e.target.checked ? 'dark' : 'light';
+  saveSettings(); applySettings();
+});
+
+document.getElementById('toggle-media').addEventListener('change', e => {
+  settings.media = e.target.checked;
+  saveSettings(); applySettings();
+  renderArticles();
+  if (activeArticle) {
+    document.getElementById('reader-body').classList.toggle('media-hidden', !settings.media);
+  }
+});
+
+document.getElementById('font-size-range').addEventListener('input', e => {
+  settings.fontSize = +e.target.value;
+  document.getElementById('font-size-val').textContent = settings.fontSize + 'px';
+  document.documentElement.style.setProperty('--font-size', settings.fontSize + 'px');
+  saveSettings();
+});
+
+document.getElementById('line-height-range').addEventListener('input', e => {
+  settings.lineHeight = +e.target.value;
+  document.getElementById('line-height-val').textContent = parseFloat(settings.lineHeight).toFixed(2);
+  document.documentElement.style.setProperty('--line-height', settings.lineHeight);
+  saveSettings();
+});
+
+document.getElementById('margin-range').addEventListener('input', e => {
+  settings.margin = +e.target.value;
+  document.getElementById('margin-val').textContent = settings.margin + 'px';
+  document.documentElement.style.setProperty('--margin', settings.margin + 'px');
+  saveSettings();
+});
+
+document.querySelectorAll('.font-option').forEach(el => {
+  el.addEventListener('click', () => {
+    settings.font = el.dataset.font;
+    saveSettings(); applySettings();
+  });
+});
+
+// ─── Init ────────────────────────────────────────────────
+settings = loadSettings();
+feeds = loadFeeds();
+applySettings();
+renderFeedList();
+if (feeds.length > 0) selectFeed(0);
+</script>
+</body>
+</html>
