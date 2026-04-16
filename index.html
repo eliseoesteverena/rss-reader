@@ -81,8 +81,10 @@
     z-index: 50;
     opacity: 0;
     transition: opacity 0.28s;
+    pointer-events: none;
   }
-  #sidebar-overlay.visible { opacity: 1; }
+  #sidebar-overlay.visible { opacity: 1;
+      pointer-events: auto;}
 
   /* ─── Sidebar ─── */
   #sidebar {
